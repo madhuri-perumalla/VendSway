@@ -1,0 +1,1242 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  SELLER
+}
+
+enum FashionRelevance {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Seasonality {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SellerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PotentialSellerStatus {
+  NOT_CONTACTED
+  INVITATION_SENT
+  INTERESTED
+  REGISTERED
+  APPROVED
+  REJECTED
+  INACTIVE
+}
+
+enum InvitationMethod {
+  EMAIL
+  PHONE
+  MANUAL
+  WHATSAPP
+}
+
+enum GapPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum MetricType {
+  DEMAND
+  GAP
+  SELLER
+}
+
+// User table for authentication
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  password          String
+  role              UserRole
+  name              String
+  phone             String?
+  profilePicture    String?
+  isEmailVerified   Boolean  @default(false)
+  emailVerifiedAt   DateTime?
+  passwordResetToken String?  @unique
+  passwordResetExpires DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sellers           Seller[]
+  refreshTokens     RefreshToken[]
+  notifications     Notification[]
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+  @@index([passwordResetToken])
+}
+
+// Refresh token model for JWT refresh tokens
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Region table for geographical regions
+model Region {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  centerLat   Decimal  @db.Decimal(10, 8)
+  centerLng   Decimal  @db.Decimal(11, 8)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  festivals           Festival[]
+  textiles            Textile[]
+  giProducts          GIProduct[]
+  regionalTrends      RegionalTrend[]
+  catalogItems        CatalogItem[]
+  demandSignals       DemandSignal[]
+  catalogGaps         CatalogGap[]
+  sellers             Seller[]
+  products            Product[]
+  regionalCollections RegionalCollection[]
+  analyticsSnapshots  AnalyticsSnapshot[]
+  potentialSellers    PotentialSeller[]
+  catalogProducts     CatalogProduct[]
+  opportunities       Opportunity[]
+  communityDemands    CommunityDemand[]
+  missions            SellerMission[]
+
+  @@map("regions")
+  @@index([code])
+  @@index([name])
+  @@index([centerLat, centerLng])
+}
+
+// Festival table for festivals
+model Festival {
+  id              String          @id @default(uuid())
+  name            String
+  regionId        String
+  date            DateTime        @db.Date
+  description     String?
+  fashionRelevance FashionRelevance
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  region              Region              @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  demandSignals       DemandSignal[]
+  catalogGaps         CatalogGap[]
+  regionalCollections RegionalCollection[]
+  opportunities       Opportunity[]
+  missions            SellerMission[]
+
+  @@map("festivals")
+  @@index([regionId])
+  @@index([date])
+  @@index([name])
+}
+
+// Textile table for regional textiles
+model Textile {
+  id          String   @id @default(uuid())
+  name        String
+  regionId    String
+  description String?
+  giTagged    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  region      Region           @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  products    ProductTextile[]
+
+  @@map("textiles")
+  @@index([regionId])
+  @@index([name])
+  @@index([giTagged])
+}
+
+// GIProduct table for GI-tagged products
+model GIProduct {
+  id                 String   @id @default(uuid())
+  name               String
+  regionId           String
+  category           String
+  description        String?
+  registrationNumber String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  region   Region    @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("gi_products")
+  @@index([regionId])
+  @@index([category])
+  @@index([registrationNumber])
+}
+
+// RegionalTrend table for regional fashion trends
+model RegionalTrend {
+  id          String      @id @default(uuid())
+  regionId    String
+  category    String
+  trendScore  Decimal     @db.Decimal(5, 2)
+  seasonality Seasonality
+  period      String
+  source      String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  region Region @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@map("regional_trends")
+  @@index([regionId])
+  @@index([category])
+  @@index([period])
+}
+
+// CatalogItem table for Myntra catalog items
+model CatalogItem {
+  id               String   @id @default(uuid())
+  productId        String?
+  regionId         String
+  category         String
+  availableQuantity Int     @default(0)
+  lastUpdated      DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  region   Region  @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@map("catalog_items")
+  @@index([productId])
+  @@index([regionId])
+  @@index([category])
+}
+
+// DemandSignal table for demand signals
+model DemandSignal {
+  id             String      @id @default(uuid())
+  excelId        Int?        @unique  // Excel regional_demand.id
+  regionId       String
+  category       String
+  festivalId     String?
+  demandScore    Decimal     @db.Decimal(5, 2)
+  seasonality    Seasonality
+  source         String
+  period         String
+  additionalData Json?       // stores productName, monthlySearchVolume, trend, growthPercentage
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  region   Region    @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  festival Festival? @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+
+  @@map("demand_signals")
+  @@index([regionId])
+  @@index([category])
+  @@index([festivalId])
+  @@index([period])
+  @@index([demandScore])
+  @@index([excelId])
+}
+
+// CatalogGap table for catalog gaps
+model CatalogGap {
+  id             String      @id @default(uuid())
+  excelId        Int?        @unique  // Excel catalog_gap.id
+  regionId       String
+  category       String
+  productName    String?     // denormalised from Excel catalog_gap.product_name
+  festivalId     String?
+  productId      String?
+  demand         Int         @default(0)
+  available      Int         @default(0)
+  gap            Int         @default(0)
+  priority       GapPriority
+  identifiedAt   DateTime    @default(now())
+  resolvedAt     DateTime?
+  additionalData Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  region   Region    @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  festival Festival? @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("catalog_gaps")
+  @@index([regionId])
+  @@index([category])
+  @@index([festivalId])
+  @@index([priority])
+  @@index([gap(sort: Desc)])
+  @@index([resolvedAt])
+  @@index([excelId])
+}
+
+// Seller table for seller accounts
+model Seller {
+  id                String            @id @default(uuid())
+  excelSellerId     Int?              @unique  // Excel approved_sellers.seller_id
+  userId            String?
+  businessName      String
+  contactPerson     String
+  email             String            @unique
+  phone             String
+  location          String
+  regionId          String?
+  giTagged          Boolean           @default(false)
+  msme              Boolean           @default(false)
+  msmeNumber        String?
+  categories        String[]
+  productionCapacity Int               @default(0)
+  rating            Decimal           @db.Decimal(3, 2)
+  status            SellerStatus
+  approvedDate      DateTime?         // Excel approved_sellers.approved_date
+  isActive          Boolean           @default(true)
+  withdrawnAt       DateTime?
+  deactivatedAt     DateTime?
+  // AI Growth fields
+  targetAudience    String[]          @default([]) // Target customer segments
+  preferredPriceRange String          @default("") // e.g., "500-2000"
+  avgOrderValue     Decimal           @default(0) @db.Decimal(10, 2)
+  conversionRate    Decimal           @default(0) @db.Decimal(5, 2)
+  totalRevenue      Decimal           @default(0) @db.Decimal(15, 2)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  region             Region?             @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  sellerApplication  SellerApplication?
+  potentialSellers   PotentialSeller[]
+  products           Product[]
+  opportunities      Opportunity[]
+  campaigns          Campaign[]
+  communityDemands   CommunityDemand[]
+  missions           SellerMission[]
+
+  @@map("sellers")
+  @@index([userId])
+  @@index([email])
+  @@index([regionId])
+  @@index([status])
+  @@index([giTagged])
+  @@index([msme])
+  @@index([rating])
+  @@index([excelSellerId])
+}
+
+// SellerApplication table for seller onboarding applications
+model SellerApplication {
+  id         String             @id @default(uuid())
+  sellerId   String             @unique
+  status     ApplicationStatus
+  submittedAt DateTime           @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+  notes      String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@map("seller_applications")
+  @@index([sellerId])
+  @@index([status])
+}
+
+// PotentialSeller table for potential seller database
+model PotentialSeller {
+  id                String                @id @default(uuid())
+  sellerName        String
+  businessName      String
+  phone             String
+  email             String
+  address           String?
+  district          String?
+  state             String?
+  regionId          String
+  categories        String[]
+  specialization    String?
+  giTagged          Boolean               @default(false)
+  giProducts        String[]
+  msme              Boolean               @default(false)
+  msmeNumber        String?
+  description       String?
+  notes             String?
+  source            String
+  status            PotentialSellerStatus @default(NOT_CONTACTED)
+  sellerId          String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  region       Region            @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  seller       Seller?           @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  invitations  Invitation[]
+  importHistory ImportHistory[]
+
+  @@map("potential_sellers")
+  @@index([regionId])
+  @@index([status])
+  @@index([sellerId])
+  @@index([email])
+  @@index([phone])
+  @@index([businessName])
+}
+
+// ImportHistory table for tracking seller imports
+model ImportHistory {
+  id              String   @id @default(uuid())
+  fileName        String
+  importedBy      String?
+  rowsImported    Int
+  duplicatesSkipped Int
+  errors          String?
+  errorReport     String?
+  createdAt       DateTime @default(now())
+
+  potentialSellers PotentialSeller[]
+
+  @@map("import_history")
+  @@index([createdAt])
+}
+
+// Invitation table for tracking seller invitations
+model Invitation {
+  id                String           @id @default(uuid())
+  potentialSellerId String
+  invitationDate    DateTime         @default(now())
+  method            InvitationMethod
+  notes             String?
+  status            String           @default("PENDING")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  potentialSeller PotentialSeller @relation(fields: [potentialSellerId], references: [id], onDelete: Cascade)
+
+  @@map("invitations")
+  @@index([potentialSellerId])
+  @@index([invitationDate])
+  @@index([status])
+}
+
+// Product table for products
+model Product {
+  id              String        @id @default(uuid())
+  excelProductId  Int?          @unique  // Excel seller_products.product_id
+  name            String
+  category        String
+  regionId        String?
+  sellerId        String
+  giProductId     String?
+  price           Decimal       @db.Decimal(10, 2)
+  giTagged        Boolean       @default(false)
+  description     String?
+  imageUrl        String?
+  available       Boolean       @default(true)
+  stock           Int           @default(0)
+  status          ProductStatus @default(PENDING)
+  adminFeedback   String?
+  customRegion    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  region        Region?                   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  seller       Seller                   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  giProduct    GIProduct?               @relation(fields: [giProductId], references: [id], onDelete: SetNull)
+  textiles     ProductTextile[]
+  catalogItems CatalogItem[]
+  catalogGaps  CatalogGap[]
+  regionalCollectionProducts RegionalCollectionProduct[]
+  opportunityProducts OpportunityProduct[]
+  missionProducts MissionProduct[]
+
+  @@map("products")
+  @@index([regionId])
+  @@index([sellerId])
+  @@index([category])
+  @@index([giTagged])
+  @@index([status])
+  @@index([price])
+  @@index([available])
+}
+
+// ProductTextile junction table for many-to-many relationship
+model ProductTextile {
+  productId String
+  textileId String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  textile Textile @relation(fields: [textileId], references: [id], onDelete: Cascade)
+
+  @@id([productId, textileId])
+  @@map("product_textiles")
+  @@index([productId])
+  @@index([textileId])
+}
+
+// RegionalCollection table for curated regional collections
+model RegionalCollection {
+  id          String   @id @default(uuid())
+  name        String
+  regionId    String
+  festivalId  String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  region   Region?                  @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  festival Festival?                @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+  products RegionalCollectionProduct[]
+
+  @@map("regional_collections")
+  @@index([regionId])
+  @@index([festivalId])
+  @@index([isActive])
+}
+
+// RegionalCollectionProduct junction table for many-to-many relationship
+model RegionalCollectionProduct {
+  collectionId String
+  productId    String
+  createdAt    DateTime @default(now())
+
+  collection RegionalCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, productId])
+  @@map("regional_collection_products")
+  @@index([collectionId])
+  @@index([productId])
+}
+
+// AnalyticsSnapshot table for analytics data
+model AnalyticsSnapshot {
+  id            String     @id @default(uuid())
+  regionId      String?
+  metricType    MetricType
+  metricValue   Decimal    @db.Decimal(15, 2)
+  period        String
+  additionalData Json?
+  createdAt     DateTime   @default(now())
+
+  region Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@map("analytics_snapshots")
+  @@index([regionId])
+  @@index([metricType])
+  @@index([period])
+  @@index([createdAt])
+}
+
+// SellerAuditLog — tracks all actions taken on potential sellers
+model SellerAuditLog {
+  id          String   @id @default(uuid())
+  sellerId    String
+  action      String
+  performedBy String
+  actionDate  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@map("seller_audit_logs")
+  @@index([sellerId])
+  @@index([action])
+  @@index([actionDate])
+}
+
+enum NotificationType {
+  SUCCESS
+  WARNING
+  ERROR
+  AI_RECOMMENDATION
+  SELLER_ALERT
+  PRODUCT_APPROVAL
+  FESTIVAL_REMINDER
+  INFO
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Notification — system/admin/seller notifications
+model Notification {
+  id            String              @id @default(uuid())
+  userId        String
+  type          NotificationType    @default(INFO)
+  priority      NotificationPriority @default(MEDIUM)
+  title         String
+  message       String?
+  link          String?
+  isRead        Boolean             @default(false)
+  readAt        DateTime?
+  metadata      Json?
+  expiresAt     DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId])
+  @@index([type])
+  @@index([priority])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([expiresAt])
+}
+
+// GapResolution — tracks how catalog gaps were resolved
+model GapResolution {
+  id             String   @id @default(uuid())
+  gapExcelId     Int      // references catalog_gap.id from Excel (not FK, Excel integer IDs)
+  sellerExcelId  Int      // references approved_sellers.seller_id from Excel
+  beforeGapScore Int
+  afterGapScore  Int
+  status         String   // 'Resolved' | 'Partially Resolved'
+  resolutionDate DateTime
+  createdAt      DateTime @default(now())
+
+  @@map("gap_resolutions")
+  @@index([gapExcelId])
+  @@index([sellerExcelId])
+  @@index([status])
+}
+
+// CatalogProduct — non-authentic / generic products already on Myntra catalog
+model CatalogProduct {
+  id          String   @id @default(uuid())
+  productName String
+  category    String
+  regionId    String?
+  sellerName  String?
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  status      String   @default("Active") // 'Active' | 'Low Stock' | 'Out of Stock'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  region Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@map("catalog_products")
+  @@index([regionId])
+  @@index([category])
+  @@index([status])
+}
+
+// ProductReview table to store product QA / review outcomes from Excel
+model ProductReview {
+  id              String   @id @default(uuid())
+  excelReviewId   Int?     @unique
+  productExcelId  Int?
+  reviewerName    String?
+  decision        String?
+  reviewDate      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@map("product_reviews")
+  @@index([productExcelId])
+  @@index([decision])
+}
+
+enum OpportunityStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignStatus {
+  DRAFT
+  READY
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+// SellerInvitation table to capture invitations stored in Excel (gap-seller outreach)
+model SellerInvitation {
+  id             String   @id @default(uuid())
+  excelId        Int?     @unique
+  sellerExcelId  Int?
+  gapExcelId     Int?
+  sentBy         String?
+  sentDate       DateTime?
+  status         String?
+  createdAt      DateTime @default(now())
+
+  @@map("seller_invitations")
+  @@index([sellerExcelId])
+  @@index([gapExcelId])
+  @@index([status])
+}
+
+// Opportunity table for AI-generated commerce opportunities
+model Opportunity {
+  id                  String           @id @default(uuid())
+  sellerId            String
+  festivalId          String?
+  regionId            String
+  opportunityScore    Decimal          @db.Decimal(5, 2)
+  predictedRevenue    Decimal          @db.Decimal(15, 2)
+  confidence          Decimal          @db.Decimal(5, 2)
+  reason              String
+  status              OpportunityStatus @default(PENDING)
+  acceptedAt          DateTime?
+  dismissedAt         DateTime?
+  expiresAt           DateTime?
+  additionalData      Json?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  seller     Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  festival   Festival?  @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+  region     Region     @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  campaign   Campaign?
+  products   OpportunityProduct[]
+
+  @@map("opportunities")
+  @@index([sellerId])
+  @@index([festivalId])
+  @@index([regionId])
+  @@index([status])
+  @@index([opportunityScore(sort: Desc)])
+  @@index([createdAt])
+}
+
+// OpportunityProduct junction table for products in an opportunity
+model OpportunityProduct {
+  opportunityId String
+  productId     String
+  priority      Int             @default(0)
+  suggestedPrice Decimal?       @db.Decimal(10, 2)
+  createdAt     DateTime        @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, productId])
+  @@map("opportunity_products")
+  @@index([opportunityId])
+  @@index([productId])
+}
+
+// Campaign table for generated marketing campaigns
+model Campaign {
+  id                String        @id @default(uuid())
+  opportunityId     String        @unique
+  sellerId          String
+  name              String
+  description       String?
+  storefrontUrl     String?
+  whatsappCaption   String?
+  instagramCaption  String?
+  facebookCaption   String?
+  bannerImageUrl    String?
+  status            CampaignStatus @default(DRAFT)
+  launchedAt        DateTime?
+  endedAt           DateTime?
+  additionalData    Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  seller     Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  performance CampaignPerformance[]
+
+  @@map("campaigns")
+  @@index([opportunityId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// CampaignPerformance table for tracking campaign metrics
+model CampaignPerformance {
+  id              String   @id @default(uuid())
+  campaignId      String
+  metricDate      DateTime @db.Date
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  conversions     Int      @default(0)
+  revenue         Decimal  @db.Decimal(15, 2) @default(0)
+  ctr             Decimal  @db.Decimal(5, 2) @default(0)
+  conversionRate  Decimal  @db.Decimal(5, 2) @default(0)
+  additionalData  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_performance")
+  @@index([campaignId])
+  @@index([metricDate])
+  @@unique([campaignId, metricDate])
+}
+
+// AgentRun table for tracking AI agent execution
+model AgentRun {
+  id              String   @id @default(uuid())
+  runType         String   // 'ORPDAL_CYCLE', 'OBSERVE', 'REASON', 'PREDICT', 'DECIDE', 'ACT', 'LEARN'
+  status          String   // 'RUNNING', 'COMPLETED', 'FAILED', 'AWAITING_APPROVAL'
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  opportunitiesGenerated Int @default(0)
+  campaignsCreated Int @default(0)
+  errorMessage    String?
+  additionalData  Json?
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  executions      AgentExecution[]
+  decisions       AgentDecision[]
+  actions         AgentAction[]
+  learningFeedback AgentLearningFeedback[]
+
+  @@map("agent_runs")
+  @@index([runType])
+  @@index([status])
+  @@index([startTime])
+  @@index([createdAt])
+}
+
+// AgentExecution table for tracking individual agent executions
+model AgentExecution {
+  id              String   @id @default(uuid())
+  agentRunId      String
+  agentName       String   // 'ObserveAgent', 'ReasoningAgent', 'PredictionAgent', 'DecisionAgent', 'ActionAgent', 'LearningAgent'
+  status          String   // 'RUNNING', 'COMPLETED', 'FAILED'
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  duration        Int?     // Duration in milliseconds
+  input           Json?
+  output          Json?
+  error           String?
+  confidence      Decimal? @db.Decimal(5, 2)
+  createdAt       DateTime @default(now())
+
+  agentRun        AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@map("agent_executions")
+  @@index([agentRunId])
+  @@index([agentName])
+  @@index([status])
+  @@index([startTime])
+}
+
+// AgentDecision table for tracking agent decisions
+model AgentDecision {
+  id              String   @id @default(uuid())
+  agentRunId      String
+  decisionType    String   // 'SELLER_MISSION', 'COMMERCE_OPPORTUNITY', 'INVENTORY_ALERT', 'CAMPAIGN_SUGGESTION'
+  decisionData    Json
+  status          String   // 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'EXECUTED'
+  priority        Int      @default(50)
+  reasoning       String
+  confidence      Decimal? @db.Decimal(5, 2)
+  approvedBy      String?
+  approvedAt      DateTime?
+  executedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  agentRun        AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@map("agent_decisions")
+  @@index([agentRunId])
+  @@index([decisionType])
+  @@index([status])
+  @@index([priority])
+}
+
+// AgentAction table for tracking agent actions
+model AgentAction {
+  id              String   @id @default(uuid())
+  agentRunId      String
+  actionType      String   // 'CREATE_OPPORTUNITY', 'CREATE_MISSION', 'SEND_NOTIFICATION', 'UPDATE_DASHBOARD'
+  actionData      Json
+  status          String   // 'PENDING', 'EXECUTED', 'FAILED'
+  targetEntity    String?  // Opportunity, Seller, Product, etc.
+  targetId        String?
+  result          Json?
+  error           String?
+  executedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  agentRun        AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@map("agent_actions")
+  @@index([agentRunId])
+  @@index([actionType])
+  @@index([status])
+  @@index([targetEntity])
+}
+
+// AgentLearningFeedback table for tracking learning outcomes
+model AgentLearningFeedback {
+  id              String   @id @default(uuid())
+  agentRunId      String
+  metricType      String   // 'MISSION_ACCEPTANCE', 'CAMPAIGN_PERFORMANCE', 'OPPORTUNITY_SUCCESS', 'DEMAND_ACCURACY'
+  metricValue     Decimal @db.Decimal(10, 2)
+  baselineValue   Decimal @db.Decimal(10, 2)
+  improvement     Decimal @db.Decimal(5, 2)
+  weightUpdate    Json?
+  insight         String
+  recommendation  String
+  confidence      Decimal @db.Decimal(5, 2)
+  createdAt       DateTime @default(now())
+
+  agentRun        AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@map("agent_learning_feedback")
+  @@index([agentRunId])
+  @@index([metricType])
+  @@index([createdAt])
+}
+
+// AgentConversation table for tracking agent conversations and memory
+model AgentConversation {
+  id              String   @id @default(uuid())
+  agentRunId      String?
+  userId          String?
+  role            String   // 'USER', 'ASSISTANT', 'SYSTEM'
+  content         String
+  context         Json?
+  timestamp       DateTime @default(now())
+
+  @@map("agent_conversations")
+  @@index([agentRunId])
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// AgentMemory table for persistent agent memory across sessions
+model AgentMemory {
+  id              String   @id @default(uuid())
+  agentRunId      String?
+  userId          String?
+  memoryType      String   // 'TASK', 'SELLER', 'REGION', 'OPPORTUNITY', 'OUTCOME'
+  memoryKey       String
+  memoryValue     Json
+  expiresAt       DateTime?
+  importance      Float    @default(0.5)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("agent_memory")
+  @@index([agentRunId])
+  @@index([userId])
+  @@index([memoryType])
+  @@index([memoryKey])
+  @@index([expiresAt])
+}
+
+// AgentToolCall table for tracking tool invocations by agents
+model AgentToolCall {
+  id              String   @id @default(uuid())
+  agentRunId      String?
+  agentName       String
+  toolName        String
+  toolInput       Json
+  toolOutput      Json?
+  executionTime   Int
+  success         Boolean
+  errorMessage    String?
+  userId          String?
+  timestamp       DateTime @default(now())
+
+  @@map("agent_tool_calls")
+  @@index([agentRunId])
+  @@index([agentName])
+  @@index([toolName])
+  @@index([timestamp])
+}
+
+// AgentFeedback table for tracking human feedback on agent decisions
+model AgentFeedback {
+  id              String   @id @default(uuid())
+  agentRunId      String?
+  agentDecisionId String?
+  feedbackType    String   // 'APPROVAL', 'REJECTION', 'CORRECTION', 'RATING'
+  feedbackValue   Json
+  userId          String?
+  timestamp       DateTime @default(now())
+
+  @@map("agent_feedback")
+  @@index([agentRunId])
+  @@index([agentDecisionId])
+  @@index([feedbackType])
+  @@index([timestamp])
+}
+
+// LLMModel table for tracking LLM model versions and training runs
+model LLMModel {
+  id              String   @id @default(uuid())
+  modelName       String
+  baseModel       String
+  version         String
+  modelPath       String
+  parameters      Json?
+  trainingDate    DateTime?
+  status          String   // 'TRAINING', 'COMPLETED', 'DEPLOYED', 'DEPRECATED'
+  accuracy        Json?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trainingRuns    LLMTrainingRun[]
+  evaluations     LLMEvaluation[]
+
+  @@map("llm_models")
+  @@index([modelName])
+  @@index([version])
+  @@index([status])
+}
+
+// LLMTrainingRun table for tracking individual training runs
+model LLMTrainingRun {
+  id              String   @id @default(uuid())
+  llmModelId      String
+  runType         String   // 'FINE_TUNING', 'QUANTIZATION', 'EVALUATION'
+  datasetPath     String
+  config          Json
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  status          String   // 'RUNNING', 'COMPLETED', 'FAILED'
+  metrics         Json?
+  artifacts       Json?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+
+  llmModel        LLMModel @relation(fields: [llmModelId], references: [id], onDelete: Cascade)
+
+  @@map("llm_training_runs")
+  @@index([llmModelId])
+  @@index([runType])
+  @@index([status])
+  @@index([startTime])
+}
+
+// LLMEvaluation table for tracking model evaluation results
+model LLMEvaluation {
+  id              String   @id @default(uuid())
+  llmModelId      String
+  trainingRunId   String?
+  benchmarkName   String
+  metrics         Json
+  timestamp       DateTime @default(now())
+
+  llmModel        LLMModel @relation(fields: [llmModelId], references: [id], onDelete: Cascade)
+
+  @@map("llm_evaluations")
+  @@index([llmModelId])
+  @@index([benchmarkName])
+  @@index([timestamp])
+}
+
+// KnowledgeDocument table for RAG knowledge base
+model KnowledgeDocument {
+  id              String   @id @default(uuid())
+  title           String
+  content         String
+  category        String
+  region          String?
+  source          String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  chunks          KnowledgeChunk[]
+
+  @@map("knowledge_documents")
+  @@index([category])
+  @@index([region])
+  @@index([source])
+  @@index([createdAt])
+}
+
+// KnowledgeChunk table for storing text chunks with embeddings
+model KnowledgeChunk {
+  id              String   @id @default(uuid())
+  documentId      String
+  chunkIndex      Int
+  content         String
+  embedding       Json?    // Store embedding as JSON array
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  document        KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_chunks")
+  @@index([documentId])
+  @@index([chunkIndex])
+  @@index([createdAt])
+}
+
+// CommunityDemand table for capturing customer requests from sellers
+model CommunityDemand {
+  id              String   @id @default(uuid())
+  sellerId        String
+  regionId        String?
+  productName     String
+  category        String?
+  budget          Decimal?  @db.Decimal(10, 2)
+  festival        String?
+  quantity        Int?
+  gender          String?
+  comments        String?
+  status          String   @default("PENDING") // 'PENDING', 'AGGREGATED', 'FULFILLED'
+  confidenceScore Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  seller Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  region Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@map("community_demands")
+  @@index([sellerId])
+  @@index([regionId])
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum MissionStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+// SellerMission table for AI-generated daily missions
+model SellerMission {
+  id                  String       @id @default(uuid())
+  sellerId            String
+  festivalId          String?
+  regionId            String
+  missionType         String       // 'FESTIVAL', 'TREND', 'COMMUNITY', 'INVENTORY'
+  opportunityScore    Decimal      @db.Decimal(5, 2)
+  confidence          Decimal      @db.Decimal(5, 2)
+  predictedRevenue    Decimal      @db.Decimal(15, 2)
+  targetAudience      String[]
+  targetAgeRange      String?
+  productCount        Int
+  reason              String
+  recommendedAction    String
+  status              MissionStatus @default(PENDING)
+  acceptedAt          DateTime?
+  dismissedAt         DateTime?
+  expiresAt           DateTime
+  additionalData      Json?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  seller     Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  festival   Festival?  @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+  region     Region     @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  performance MissionPerformance[]
+  products   MissionProduct[]
+
+  @@map("seller_missions")
+  @@index([sellerId])
+  @@index([festivalId])
+  @@index([regionId])
+  @@index([status])
+  @@index([opportunityScore(sort: Desc)])
+  @@index([createdAt])
+}
+
+// MissionProduct junction table for products in a mission
+model MissionProduct {
+  missionId       String
+  productId       String
+  priority        Int      @default(0)
+  suggestedPrice  Decimal? @db.Decimal(10, 2)
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  mission  SellerMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([missionId, productId])
+  @@map("mission_products")
+  @@index([missionId])
+  @@index([productId])
+}
+
+// MissionPerformance table for tracking mission execution
+model MissionPerformance {
+  id              String   @id @default(uuid())
+  missionId       String
+  metricDate      DateTime @db.Date
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  conversions     Int      @default(0)
+  revenue         Decimal  @db.Decimal(15, 2) @default(0)
+  ctr             Decimal  @db.Decimal(5, 2) @default(0)
+  conversionRate  Decimal  @db.Decimal(5, 2) @default(0)
+  customerFeedback Json?
+  additionalData  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  mission SellerMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@map("mission_performance")
+  @@index([missionId])
+  @@index([metricDate])
+  @@unique([missionId, metricDate])
+}
